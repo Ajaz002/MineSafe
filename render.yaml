@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: minesafe-api
+    name: minesafe-ajaz
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free

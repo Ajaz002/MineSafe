@@ -17,7 +17,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="MineSafe Industrial AI Safety API",
     description="Real-Time Computer Vision PPE Detection & Workplace Safety Compliance Backend",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 # CORS Middleware
@@ -32,6 +35,17 @@ app.add_middleware(
 # Mount static file directories for generated images
 app.mount("/static/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 app.mount("/static/annotated", StaticFiles(directory=str(ANNOTATED_DIR)), name="annotated")
+
+# Primary Health Check Endpoints (Zero-delay for cloud deployment health monitors)
+@app.get("/health")
+@app.get("/api/health")
+def root_health():
+    return {
+        "status": "ONLINE",
+        "service": "MineSafe AI Safety API",
+        "engine": "FastAPI + Ultralytics YOLO",
+        "version": "1.0.0"
+    }
 
 # Mount Routers
 app.include_router(detect.router)

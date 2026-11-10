@@ -14,7 +14,12 @@ class YOLODetector:
         self.model_path = resolve_model_path()
         self.model = None
         self.device = "cpu"  # Keep web server on CPU to avoid GPU conflict with background training
-        self._load_model()
+        # Note: Model is loaded on-demand to guarantee fast container boot and low idle RAM
+
+    def ensure_loaded(self):
+        """Ensures the model weights are loaded into memory before inference."""
+        if self.model is None:
+            self._load_model()
 
     def _load_model(self):
         try:
@@ -42,6 +47,7 @@ class YOLODetector:
         Executes YOLO inference on an image (filepath, numpy ndarray, or PIL).
         Returns detections list, annotated image, and timing.
         """
+        self.ensure_loaded()
         self.refresh_model_if_new()
 
         if self.model is None:

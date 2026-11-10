@@ -20,6 +20,7 @@ def get_system_health():
         "engine": "MineSafe Neural Vision Engine",
         "model": {
             "name": model_name,
+            "loaded": detector.model is not None,
             "version": "1.0-prod",
             "classes_count": len(CLASSES),
             "classes": list(CLASSES.values()),
