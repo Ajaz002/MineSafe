@@ -34,3 +34,4 @@ RUN mkdir -p /app/backend/uploads /app/backend/annotated /app/models
 EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+
