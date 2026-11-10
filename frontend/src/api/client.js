@@ -45,9 +45,50 @@ export function resolveMediaUrl(url) {
   return url;
 }
 
+async function compressImageForUpload(file, maxDim = 800, quality = 0.82) {
+  if (typeof document === 'undefined' || !file || !file.type?.startsWith('image/')) {
+    return file;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objUrl);
+      const { width, height } = img;
+      if (width <= maxDim && height <= maxDim && file.size <= 150 * 1024) {
+        resolve(file);
+        return;
+      }
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(new File([blob], (file.name || 'upload').replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+          } else {
+            resolve(file);
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objUrl);
+      resolve(file);
+    };
+    img.src = objUrl;
+  });
+}
+
 export async function detectImageAPI(file, zone = 'Sector Alpha', conf = 0.35, iou = 0.45) {
+  const optimizedFile = await compressImageForUpload(file);
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', optimizedFile);
   formData.append('zone', zone);
   formData.append('conf_threshold', conf.toString());
   formData.append('iou_threshold', iou.toString());

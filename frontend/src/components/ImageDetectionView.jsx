@@ -59,7 +59,7 @@ export default function ImageDetectionView({ onNavigateHistory }) {
       const blob = await res.blob();
       const file = new File([blob], `${preset.id}.jpg`, { type: 'image/jpeg' });
       const result = await detectImageAPI(file, selectedZone, confThreshold, iouThreshold);
-      setAnnotatedResult(result);
+      setAnnotatedResult({ ...result, local_original_url: preset.url });
       setIsDemoMode(false);
     } catch (err) {
       console.error("Preset inference error:", err);
@@ -85,7 +85,7 @@ export default function ImageDetectionView({ onNavigateHistory }) {
 
     try {
       const result = await detectImageAPI(selectedFile, selectedZone, confThreshold, iouThreshold);
-      setAnnotatedResult(result);
+      setAnnotatedResult({ ...result, local_original_url: previewUrl });
       setIsDemoMode(false);
     } catch (err) {
       console.error("Inference Error:", err);

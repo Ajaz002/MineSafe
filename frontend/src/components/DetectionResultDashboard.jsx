@@ -23,6 +23,7 @@ import {
   Eye,
   FileCheck
 } from 'lucide-react';
+import { resolveMediaUrl } from '../api/client';
 
 export default function DetectionResultDashboard({ result, onReset, onViewHistory }) {
   const [viewMode, setViewMode] = useState('annotated'); // 'annotated', 'original', 'split'
@@ -58,7 +59,8 @@ export default function DetectionResultDashboard({ result, onReset, onViewHistor
 
   // Download annotated image or video
   const handleDownload = () => {
-    const downloadUrl = result.annotated_image || result.image_url || result.annotated_video_url || result.snapshot_url;
+    const rawUrl = result.annotated_image || result.image_url || result.annotated_video_url || result.snapshot_url;
+    const downloadUrl = resolveMediaUrl(rawUrl);
     if (!downloadUrl) return;
     const link = document.createElement('a');
     link.href = downloadUrl;
@@ -226,7 +228,7 @@ export default function DetectionResultDashboard({ result, onReset, onViewHistor
                 Visual Inspection Evidence
               </h3>
 
-              {!isVideo && result.original_url && (
+              {!isVideo && (result.local_original_url || result.original_url) && (
                 <div className="flex items-center gap-1 bg-[#F5F7F6] dark:bg-[#141C19] p-1 rounded-xl border border-[#E2E8E5] dark:border-[#24302B]">
                   <button
                     onClick={() => setViewMode('annotated')}
@@ -256,14 +258,25 @@ export default function DetectionResultDashboard({ result, onReset, onViewHistor
             <div className="relative bg-[#202A27] dark:bg-[#141C19] rounded-xl overflow-hidden aspect-video flex items-center justify-center">
               {isVideo ? (
                 <video
-                  src={result.annotated_video_url || result.original_video_url}
+                  src={resolveMediaUrl(result.annotated_video_url || result.original_video_url)}
+                  poster={result.preview_frame || undefined}
                   controls
                   playsInline
                   className="w-full h-full object-contain"
                 />
               ) : (
                 <img
-                  src={viewMode === 'annotated' ? (result.annotated_image || result.image_url) : result.original_url}
+                  src={
+                    viewMode === 'annotated'
+                      ? (result.annotated_image || resolveMediaUrl(result.image_url))
+                      : (result.local_original_url || resolveMediaUrl(result.original_url) || result.annotated_image)
+                  }
+                  onError={(e) => {
+                    const fallback = result.local_original_url || result.annotated_image;
+                    if (fallback && e.currentTarget.src !== fallback) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                   alt="Inspection Evidence"
                   className="w-full h-full object-contain"
                 />
