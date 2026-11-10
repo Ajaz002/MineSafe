@@ -9,7 +9,6 @@ from pathlib import Path
 
 from .database import engine, Base
 from .config import UPLOAD_DIR, ANNOTATED_DIR
-from .detector import detector
 from .api import detect, cameras, history, analytics, reports, settings, system
 
 # Create database tables
@@ -23,10 +22,6 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json"
 )
-
-@app.on_event("startup")
-def startup_warmup():
-    detector.warmup_async()
 
 # CORS Middleware
 app.add_middleware(

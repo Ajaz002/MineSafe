@@ -31,7 +31,7 @@ class YOLODetector:
         self.model = None
         self.device = "cpu"  # Keep web server on CPU to avoid GPU conflict with background training
         self._lock = threading.Lock()
-        self.imgsz = int(os.environ.get("YOLO_IMGSZ", "480"))
+        self.imgsz = int(os.environ.get("YOLO_IMGSZ", "320"))
 
     def ensure_loaded(self):
         """Ensures the model weights are loaded into memory before inference."""

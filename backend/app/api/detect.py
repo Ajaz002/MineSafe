@@ -3,6 +3,7 @@ Detection API Endpoints: Image, Webcam Frame, Video & Session Auditing
 """
 import uuid
 import time
+import asyncio
 import base64
 import io
 import cv2
@@ -96,8 +97,8 @@ async def detect_image(
         scale = 1280.0 / max_dim
         img_bgr = cv2.resize(img_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-    # Execute YOLO detection
-    det_result = detector.detect(img_bgr, conf_threshold=conf_threshold, iou_threshold=iou_threshold)
+    # Execute YOLO detection in threadpool so FastAPI event loop / health checks never block
+    det_result = await asyncio.to_thread(detector.detect, img_bgr, conf_threshold, iou_threshold)
     detections = det_result["detections"]
     annotated_bgr = det_result["annotated_bgr"]
     inference_time = det_result["inference_time_ms"]
@@ -208,8 +209,8 @@ async def detect_frame(request: Request):
             fscale = 640.0 / max(fh, fw)
             img_bgr = cv2.resize(img_bgr, (int(fw * fscale), int(fh * fscale)), interpolation=cv2.INTER_AREA)
 
-        # Detect using fast 384px input resolution for low-latency streaming
-        det_result = detector.detect(img_bgr, conf_threshold=conf_threshold, imgsz=384)
+        # Detect using fast 320px input resolution in threadpool so event loop never blocks
+        det_result = await asyncio.to_thread(detector.detect, img_bgr, conf_threshold, 0.45, 320)
         detections = det_result["detections"]
         annotated_bgr = det_result["annotated_bgr"]
 
@@ -302,7 +303,7 @@ async def detect_video(
         if frame_idx % effective_stride == 0 and processed_count < max_eval_frames:
             if (frame_bgr.shape[1], frame_bgr.shape[0]) != (width, height):
                 frame_bgr = cv2.resize(frame_bgr, (width, height), interpolation=cv2.INTER_AREA)
-            det_result = detector.detect(frame_bgr, conf_threshold=conf_threshold, iou_threshold=iou_threshold, imgsz=384)
+            det_result = await asyncio.to_thread(detector.detect, frame_bgr, conf_threshold, iou_threshold, 320)
             detections = det_result["detections"]
             annotated_frame = det_result["annotated_bgr"]
             compliance = evaluate_compliance(detections)
