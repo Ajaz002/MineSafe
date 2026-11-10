@@ -202,8 +202,14 @@ async def detect_frame(request: Request):
         if img_bgr is None:
             raise ValueError("Could not decode frame buffer.")
 
-        # Detect
-        det_result = detector.detect(img_bgr, conf_threshold=conf_threshold)
+        # Cap frame dimensions to 640px max side for fast real-time streaming
+        fh, fw = img_bgr.shape[:2]
+        if max(fh, fw) > 640:
+            fscale = 640.0 / max(fh, fw)
+            img_bgr = cv2.resize(img_bgr, (int(fw * fscale), int(fh * fscale)), interpolation=cv2.INTER_AREA)
+
+        # Detect using fast 384px input resolution for low-latency streaming
+        det_result = detector.detect(img_bgr, conf_threshold=conf_threshold, imgsz=384)
         detections = det_result["detections"]
         annotated_bgr = det_result["annotated_bgr"]
 
@@ -257,16 +263,29 @@ async def detect_video(
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     video_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 360
+    orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
+    orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 360
+    if max(orig_width, orig_height) > 640:
+        vscale = 640.0 / max(orig_width, orig_height)
+        width = max(2, int(orig_width * vscale) & ~1)
+        height = max(2, int(orig_height * vscale) & ~1)
+    else:
+        width, height = orig_width, orig_height
     duration_secs = round(total_frames / video_fps, 1) if video_fps > 0 else 0
+
+    # Cap total evaluated frames to 10 keyframes so cloud CPU containers finish in seconds
+    max_eval_frames = 10
+    if total_frames > 0:
+        effective_stride = max(frame_stride, int(np.ceil(total_frames / max_eval_frames)))
+    else:
+        effective_stride = max(frame_stride, 15)
 
     annotated_filename = f"{event_id}_annotated.mp4"
     annotated_path = ANNOTATED_DIR / annotated_filename
 
     # Video Writer
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out_writer = cv2.VideoWriter(str(annotated_path), fourcc, max(video_fps / frame_stride, 5.0), (width, height))
+    out_writer = cv2.VideoWriter(str(annotated_path), fourcc, max(video_fps / effective_stride, 2.0), (width, height))
 
     processed_count = 0
     total_workers_observed = 0
@@ -280,8 +299,10 @@ async def detect_video(
         if not ret:
             break
 
-        if frame_idx % frame_stride == 0:
-            det_result = detector.detect(frame_bgr, conf_threshold=conf_threshold, iou_threshold=iou_threshold)
+        if frame_idx % effective_stride == 0 and processed_count < max_eval_frames:
+            if (frame_bgr.shape[1], frame_bgr.shape[0]) != (width, height):
+                frame_bgr = cv2.resize(frame_bgr, (width, height), interpolation=cv2.INTER_AREA)
+            det_result = detector.detect(frame_bgr, conf_threshold=conf_threshold, iou_threshold=iou_threshold, imgsz=384)
             detections = det_result["detections"]
             annotated_frame = det_result["annotated_bgr"]
             compliance = evaluate_compliance(detections)

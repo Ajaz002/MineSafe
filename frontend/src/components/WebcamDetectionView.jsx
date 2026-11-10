@@ -43,6 +43,7 @@ export default function WebcamDetectionView({ onNavigateHistory }) {
   const intervalRef = useRef(null);
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
+  const inFlightRef = useRef(false);
 
   // Play alert audio for violations
   const triggerAudioWarning = useCallback(() => {
@@ -153,19 +154,21 @@ export default function WebcamDetectionView({ onNavigateHistory }) {
 
   // Capture frame and send to backend
   const captureAndInfer = useCallback(async () => {
+    if (inFlightRef.current) return;
     if (!videoRef.current || !canvasRef.current || !isStreaming) return;
 
     const video = videoRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
     const canvas = canvasRef.current;
-    canvas.width = 640;
-    canvas.height = 360;
+    canvas.width = 480;
+    canvas.height = 270;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const base64Data = canvas.toDataURL('image/jpeg', 0.7);
+    const base64Data = canvas.toDataURL('image/jpeg', 0.6);
 
+    inFlightRef.current = true;
     try {
       const result = await detectFrameAPI(base64Data, confThreshold);
       if (result) {
@@ -186,6 +189,8 @@ export default function WebcamDetectionView({ onNavigateHistory }) {
       }
     } catch (err) {
       console.warn('Frame detection skipped:', err);
+    } finally {
+      inFlightRef.current = false;
     }
   }, [isStreaming, confThreshold, triggerAudioWarning]);
 

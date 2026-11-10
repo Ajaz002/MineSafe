@@ -52,13 +52,22 @@ def get_analytics_summary(db: Session = Depends(get_db)):
             "hourly_trend": DEMO_HOURLY_TREND
         }
 
-    # Live Database Statistics
-    total_images = db.query(DetectionEvent).filter(DetectionEvent.source_type == "image").count()
-    total_videos = db.query(DetectionEvent).filter(DetectionEvent.source_type == "video").count()
-    total_webcam = db.query(DetectionEvent).filter(DetectionEvent.source_type == "webcam").count()
+    # Live Database Statistics (grouped queries for low-latency response)
+    source_counts = dict(
+        db.query(DetectionEvent.source_type, func.count(DetectionEvent.id))
+        .group_by(DetectionEvent.source_type)
+        .all()
+    )
+    total_images = source_counts.get("image", 0)
+    total_videos = source_counts.get("video", 0)
+    total_webcam = source_counts.get("webcam", 0)
 
-    total_workers_sum = db.query(func.sum(DetectionEvent.total_persons)).scalar() or 0
-    total_violations_sum = db.query(func.sum(DetectionEvent.total_violations)).scalar() or 0
+    sums = db.query(
+        func.sum(DetectionEvent.total_persons),
+        func.sum(DetectionEvent.total_violations)
+    ).first()
+    total_workers_sum = (sums[0] if sums else 0) or 0
+    total_violations_sum = (sums[1] if sums else 0) or 0
     
     events_with_workers = db.query(DetectionEvent).filter(DetectionEvent.total_persons > 0).count()
     if events_with_workers > 0:
@@ -67,9 +76,15 @@ def get_analytics_summary(db: Session = Depends(get_db)):
     else:
         compliance_rate = None
 
-    # Count detected PPE pieces
+    # Single-pass grouped count of all detected object classes
+    class_counts = dict(
+        db.query(DetectedObject.class_name, func.count(DetectedObject.id))
+        .group_by(DetectedObject.class_name)
+        .all()
+    )
+
     ppe_classes = ["helmet", "vest", "gloves", "goggles", "boots", "mask"]
-    total_ppe_items = db.query(DetectedObject).filter(DetectedObject.class_name.in_(ppe_classes)).count()
+    total_ppe_items = sum(class_counts.get(c, 0) for c in ppe_classes)
 
     # Per-equipment statistics from actual detections
     equipment_stats = []
@@ -83,8 +98,8 @@ def get_analytics_summary(db: Session = Depends(get_db)):
     ]
 
     for category, item_name, pos_cls, neg_cls in gear_mapping:
-        pos_count = db.query(DetectedObject).filter(DetectedObject.class_name == pos_cls).count()
-        neg_count = db.query(DetectedObject).filter(DetectedObject.class_name == neg_cls).count() if neg_cls else 0
+        pos_count = class_counts.get(pos_cls, 0)
+        neg_count = class_counts.get(neg_cls, 0) if neg_cls else 0
         total_eval = pos_count + neg_count
         comp_rate = round((pos_count / total_eval * 100), 1) if total_eval > 0 else 100.0
         status = "optimal" if comp_rate >= 90 else "attention" if comp_rate >= 80 else "warning"

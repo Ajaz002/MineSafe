@@ -80,7 +80,7 @@ class YOLODetector:
             self.model_path = current_best
             self._load_model()
 
-    def detect(self, image_input, conf_threshold=0.35, iou_threshold=0.45):
+    def detect(self, image_input, conf_threshold=0.35, iou_threshold=0.45, imgsz=None):
         """
         Executes YOLO inference on an image (filepath, numpy ndarray, or PIL).
         Returns detections list, annotated image, and timing.
@@ -92,12 +92,13 @@ class YOLODetector:
             raise RuntimeError("YOLO model not loaded.")
 
         start_time = time.time()
+        target_imgsz = imgsz or self.imgsz
 
         # Run inference with torch.inference_mode and optimized imgsz for low-vCPU cloud containers
         with torch.inference_mode():
             results = self.model.predict(
                 source=image_input,
-                imgsz=self.imgsz,
+                imgsz=target_imgsz,
                 conf=conf_threshold,
                 iou=iou_threshold,
                 device=self.device,

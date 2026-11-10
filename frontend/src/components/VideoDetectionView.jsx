@@ -43,6 +43,7 @@ export default function VideoDetectionView({ onNavigateHistory }) {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const processTimerRef = useRef(null);
+  const inFlightRef = useRef(false);
 
   // Handle Video Selection
   const handleFileChange = (e) => {
@@ -118,6 +119,7 @@ export default function VideoDetectionView({ onNavigateHistory }) {
 
   // 2. Interactive Browser Frame-by-Frame Scanner
   const sampleFrameAndInfer = async () => {
+    if (inFlightRef.current) return;
     if (!videoRef.current || !canvasRef.current || videoRef.current.ended) {
       if (videoRef.current?.ended) {
         setIsInteractiveScanning(false);
@@ -129,16 +131,17 @@ export default function VideoDetectionView({ onNavigateHistory }) {
     if (video.paused) return;
 
     const canvas = canvasRef.current;
-    canvas.width = 640;
-    canvas.height = 360;
+    canvas.width = 480;
+    canvas.height = 270;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const base64Data = canvas.toDataURL('image/jpeg', 0.65);
+    const base64Data = canvas.toDataURL('image/jpeg', 0.6);
     const timePos = video.currentTime;
     const estimatedFrame = Math.round(timePos * 25);
     setCurrentFrameNum(estimatedFrame);
 
+    inFlightRef.current = true;
     try {
       const res = await detectFrameAPI(base64Data, confThreshold);
       if (res) {
@@ -173,6 +176,8 @@ export default function VideoDetectionView({ onNavigateHistory }) {
       }
     } catch (err) {
       console.warn("Video frame error:", err);
+    } finally {
+      inFlightRef.current = false;
     }
   };
 
