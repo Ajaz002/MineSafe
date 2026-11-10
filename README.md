@@ -188,6 +188,9 @@ npm run dev
 
 ## ☁️ Cloud Deployment Guide
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Ajaz002/MineSafe)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FAjaz002%2FMineSafe&root-directory=frontend)
+
 ### Deploying Backend (Render / Railway)
 1. **Render:**
    * Create a new Web Service and link your GitHub repository `Ajaz002/MineSafe`.
