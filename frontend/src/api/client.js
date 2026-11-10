@@ -4,11 +4,37 @@
  * avoiding any cross-origin/CORS discrepancies between localhost, 127.0.0.1, or remote hosts.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') 
-  : ((typeof window !== 'undefined' && window.location.hostname && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-      ? ''
-      : 'https://minesafe-ajaz.onrender.com');
+const IS_LOCALHOST =
+  typeof window !== 'undefined' &&
+  window.location.hostname &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const REMOTE_CANDIDATES = [
+  'https://minesafe-azjz.onrender.com',
+  'https://minesafe-ajaz.onrender.com'
+];
+
+export let API_BASE_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace(/\/+$/, '')
+  : (IS_LOCALHOST ? '' : REMOTE_CANDIDATES[0]);
+
+async function apiFetch(path, options) {
+  if (IS_LOCALHOST || import.meta.env.VITE_API_URL) {
+    return fetch(`${API_BASE_URL}${path}`, options);
+  }
+  for (const base of [API_BASE_URL, ...REMOTE_CANDIDATES.filter(b => b !== API_BASE_URL)]) {
+    try {
+      const res = await fetch(`${base}${path}`, options);
+      if (res.status !== 404) {
+        API_BASE_URL = base;
+        return res;
+      }
+    } catch {
+      // Try next candidate
+    }
+  }
+  return fetch(`${API_BASE_URL}${path}`, options);
+}
 
 export function resolveMediaUrl(url) {
   if (!url) return '';
@@ -26,7 +52,7 @@ export async function detectImageAPI(file, zone = 'Sector Alpha', conf = 0.35, i
   formData.append('conf_threshold', conf.toString());
   formData.append('iou_threshold', iou.toString());
 
-  const response = await fetch(`${API_BASE_URL}/api/detect/image`, {
+  const response = await apiFetch(`/api/detect/image`, {
     method: 'POST',
     body: formData
   });
@@ -49,7 +75,7 @@ export async function detectFrameAPI(base64Frame, conf = 0.35) {
   formData.append('frame_data', base64Frame);
   formData.append('conf_threshold', conf.toString());
 
-  const response = await fetch(`${API_BASE_URL}/api/detect/frame`, {
+  const response = await apiFetch(`/api/detect/frame`, {
     method: 'POST',
     body: formData
   });
@@ -73,7 +99,7 @@ export async function detectVideoAPI(file, zone = 'Sector Alpha', conf = 0.35, i
   formData.append('iou_threshold', iou.toString());
   formData.append('frame_stride', frameStride.toString());
 
-  const response = await fetch(`${API_BASE_URL}/api/detect/video`, {
+  const response = await apiFetch(`/api/detect/video`, {
     method: 'POST',
     body: formData
   });
@@ -102,7 +128,7 @@ export async function saveWebcamSessionAPI(sessionData) {
     formData.append('snapshot_base64', sessionData.snapshot_base64);
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/detect/webcam/session`, {
+  const response = await apiFetch(`/api/detect/webcam/session`, {
     method: 'POST',
     body: formData
   });
@@ -115,7 +141,7 @@ export async function saveWebcamSessionAPI(sessionData) {
 
 export async function fetchAnalyticsAPI() {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/analytics/summary`);
+    const res = await apiFetch(`/api/analytics/summary`);
     if (!res.ok) throw new Error();
     return await res.json();
   } catch {
@@ -125,7 +151,7 @@ export async function fetchAnalyticsAPI() {
 
 export async function fetchHistoryAPI(limit = 50) {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/history?limit=${limit}`);
+    const res = await apiFetch(`/api/history?limit=${limit}`);
     if (!res.ok) throw new Error();
     return await res.json();
   } catch {
@@ -135,7 +161,7 @@ export async function fetchHistoryAPI(limit = 50) {
 
 export async function fetchSystemHealthAPI() {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/system/health`);
+    const res = await apiFetch(`/api/system/health`);
     if (!res.ok) throw new Error();
     return await res.json();
   } catch {
@@ -145,7 +171,7 @@ export async function fetchSystemHealthAPI() {
 
 export async function fetchSettingsAPI() {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/settings`);
+    const res = await apiFetch(`/api/settings`);
     if (!res.ok) throw new Error();
     return await res.json();
   } catch {
@@ -154,7 +180,7 @@ export async function fetchSettingsAPI() {
 }
 
 export async function updateSettingsAPI(settings) {
-  const res = await fetch(`${API_BASE_URL}/api/settings`, {
+  const res = await apiFetch(`/api/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings)
