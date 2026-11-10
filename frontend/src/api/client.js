@@ -10,8 +10,8 @@ const IS_LOCALHOST =
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
 const REMOTE_CANDIDATES = [
-  'https://minesafe-azjz.onrender.com',
-  'https://minesafe-ajaz.onrender.com'
+  'https://minesafe-ajaz.onrender.com',
+  'https://minesafe-azjz.onrender.com'
 ];
 
 export let API_BASE_URL = import.meta.env.VITE_API_URL
