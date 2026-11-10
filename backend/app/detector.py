@@ -2,29 +2,67 @@
 YOLO Inference Engine
 Executes PPE object detection on CPU/GPU safely.
 """
+import os
 import time
+import threading
+
+# Prevent OpenMP/MKL thread thrashing on fractional-vCPU cloud containers (Render/Railway)
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 import cv2
 import numpy as np
+import torch
 from pathlib import Path
 from ultralytics import YOLO
 from .config import resolve_model_path, CLASSES, CLASS_DETAILS
+
+try:
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+    cv2.setNumThreads(1)
+except Exception:
+    pass
 
 class YOLODetector:
     def __init__(self):
         self.model_path = resolve_model_path()
         self.model = None
         self.device = "cpu"  # Keep web server on CPU to avoid GPU conflict with background training
-        # Note: Model is loaded on-demand to guarantee fast container boot and low idle RAM
+        self._lock = threading.Lock()
+        self.imgsz = int(os.environ.get("YOLO_IMGSZ", "480"))
 
     def ensure_loaded(self):
         """Ensures the model weights are loaded into memory before inference."""
         if self.model is None:
-            self._load_model()
+            with self._lock:
+                if self.model is None:
+                    self._load_model()
+
+    def warmup_async(self):
+        """Pre-loads and fuses the YOLO model in a background thread after server startup."""
+        def _bg():
+            try:
+                self.ensure_loaded()
+                if self.model is not None:
+                    dummy = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.uint8)
+                    with torch.inference_mode():
+                        self.model.predict(source=dummy, imgsz=self.imgsz, device=self.device, verbose=False)
+                    print("[Detector] Background model warmup & layer fusion complete.")
+            except Exception as e:
+                print(f"[Detector] Warmup warning: {e}")
+        threading.Thread(target=_bg, daemon=True).start()
 
     def _load_model(self):
         try:
             print(f"[Detector] Loading model from: {self.model_path} on {self.device}")
-            self.model = YOLO(self.model_path)
+            model = YOLO(self.model_path)
+            try:
+                model.fuse()
+            except Exception:
+                pass
+            self.model = model
             print(f"[Detector] Successfully loaded model.")
         except Exception as e:
             print(f"[Detector] Error loading model {self.model_path}: {e}")
@@ -55,14 +93,16 @@ class YOLODetector:
 
         start_time = time.time()
 
-        # Run inference
-        results = self.model.predict(
-            source=image_input,
-            conf=conf_threshold,
-            iou=iou_threshold,
-            device=self.device,
-            verbose=False
-        )
+        # Run inference with torch.inference_mode and optimized imgsz for low-vCPU cloud containers
+        with torch.inference_mode():
+            results = self.model.predict(
+                source=image_input,
+                imgsz=self.imgsz,
+                conf=conf_threshold,
+                iou=iou_threshold,
+                device=self.device,
+                verbose=False
+            )
 
         inference_time_ms = round((time.time() - start_time) * 1000, 1)
 

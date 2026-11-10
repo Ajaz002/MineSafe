@@ -89,6 +89,13 @@ async def detect_image(
             detail="Could not decode the uploaded image format. Please ensure it is a valid JPG, PNG, WEBP, or AVIF file."
         )
 
+    # Cap resolution to 1280px max side to avoid huge CPU annotation & base64 transfer overhead
+    h, w = img_bgr.shape[:2]
+    max_dim = max(h, w)
+    if max_dim > 1280:
+        scale = 1280.0 / max_dim
+        img_bgr = cv2.resize(img_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
     # Execute YOLO detection
     det_result = detector.detect(img_bgr, conf_threshold=conf_threshold, iou_threshold=iou_threshold)
     detections = det_result["detections"]
